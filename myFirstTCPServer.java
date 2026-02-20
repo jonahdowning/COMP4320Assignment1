@@ -13,7 +13,8 @@ public class myFirstTCPServer {
     Socket clntSock = servSock.accept();
 
 
-    System.out.println("Received Binary-Encoded Friend");
+    System.out.println(clntSock.getInputStream().read()); // Read quantity as a byte (note: this will only work for quantities less than 256)
+    clntSock.getInputStream().close();
     
 
     clntSock.close();
