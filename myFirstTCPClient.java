@@ -3,6 +3,7 @@ import java.net.*;  // for Socket
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;  // for Scanner
+import java.nio.ByteBuffer; //ByteBuffer for primitive types
 
 public class myFirstTCPClient {
 
@@ -40,10 +41,42 @@ public class myFirstTCPClient {
 
     items.add((short)-1);
     
+    // 2 bytes for RequestID + 2 bytes for TML + (number of elements * 2 bytes)
+    short tml = (short) (4 + (items.size() * 2));
     
+    ByteBuffer buffer = ByteBuffer.allocate(tml);
+
+    // Field 1: Request # [cite: 33]
+    buffer.putShort(requestID);
+
+    // Field 2: TML 
+    buffer.putShort(tml);
+
+    // Field 3: All (Q, C) pairs and the -1 terminator 
+    for (short value : items) {
+        buffer.putShort(value);
+    }
+
+    // Convert the buffer to a standard byte array
+    byte[] arrayA = buffer.array();
+
+    //print in hexidecimal format
+    System.out.print("Array A (Hex): ");
+    for (byte b : arrayA) {
+        System.out.printf("0x%02X ", b);
+    }
+    System.out.println();
+
+    // Send to server
+    OutputStream out = sock.getOutputStream();
+    out.write(arrayA);
+    out.flush();
+
+    // Wait for a response (Requirement Step 6)
+    // For now, we just close to see if the client runs without errors
+    sock.close();
 
 
-    
     //System.out.println("Displaying order: " + q + " " + c); // Display order just to check what we send
     // System.out.println("Sending Friend (Binary)");
     // OutputStream out = sock.getOutputStream(); // Get a handle onto Output Stream
