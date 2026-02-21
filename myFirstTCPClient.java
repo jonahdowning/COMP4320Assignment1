@@ -1,5 +1,7 @@
 import java.io.*;   // for Input/OutputStream
 import java.net.*;  // for Socket
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Scanner;  // for Scanner
 
 public class myFirstTCPClient {
@@ -18,21 +20,36 @@ public class myFirstTCPClient {
 
     // TAKE INPUTS
     Scanner sc = new Scanner(System.in);
-    System.out.println("Enter a item code: ");
-    String itemCode = sc.nextLine();
-    System.out.println("Enter a quantity: ");
-    int quantity = sc.nextInt();
+    List<Short> items = new ArrayList<>(); 
+    short requestID = 101; 
+
+    while (true) {
+        System.out.print("Enter a quantity number between 0-32767 (or -1 to finish): ");
+        short q = sc.nextShort(); 
+        
+        if (q == -1) { 
+            break;
+        }
+        
+        System.out.print("Enter a description code between 0-32767: ");
+        short c = sc.nextShort(); 
+        
+        items.add(q);
+        items.add(c);
+    }
+
+    items.add((short)-1);
     
     
-    System.out.println("Displaying order: " + itemCode + " " + quantity); // Display order just to check what we send
 
 
-
-    System.out.println("Sending Friend (Binary)");
-    OutputStream out = sock.getOutputStream(); // Get a handle onto Output Stream
-    out.write(itemCode.getBytes()); // Send item code as bytes
-    out.write(quantity); // Send quantity as a byte (note: this will only work for
-    sock.close();
+    
+    //System.out.println("Displaying order: " + q + " " + c); // Display order just to check what we send
+    // System.out.println("Sending Friend (Binary)");
+    // OutputStream out = sock.getOutputStream(); // Get a handle onto Output Stream
+    // out.write(itemCode.getBytes()); // Send item code as bytes
+    // out.write(quantity); // Send quantity as a byte (note: this will only work for
+    // sock.close();
 
   }
 }
