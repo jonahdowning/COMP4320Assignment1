@@ -107,7 +107,7 @@ public class myFirstTCPServer{
         // 1. Get the real data from the CSV map
         Object[] data = itemDataMap.get(code);
         String description = (data != null) ? (String)data[1] : "Unknown Item";
-        int unitPrice = (data != null) ? (int)data[0] : 0; // Price from CSV
+        int unitPrice = (data != null) ? (int)data[0] * 100: 0; // Price from CSV
 
         // 2. Calculate the actual cost for this item
         int cost = originalQuantity * unitPrice;

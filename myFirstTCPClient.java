@@ -125,46 +125,48 @@ public class myFirstTCPClient {
 
     int itemCount = 0;
 
-    // This loop reads items until the server sends the trailer (-1)
-    while (true) {
-        // Step 5c: Read the length L of the description. 
-        // We read it as a byte.
-        byte len = din.readByte();
+    
+    
 
-        // Check if this is the trailer (-1). 
-        // If the server sends 0xFFFF for a short, the first byte read is -1.
-        if (len == -1) {
-            break; 
+    if (resTML == -1 || resTML == (short)0xFFFF) {
+        System.out.println("Error: Server reported a TML Mismatch.");
+    } 
+
+    else {
+        System.out.println("\n------------------------------------------------------------------");
+        System.out.printf("%-10s %-20s %-12s %-10s %-15s\n", "Item #", "Description", "Unit Cost", "Quantity", "Cost Per Item");
+        System.out.println("------------------------------------------------------------------");
+
+        // Calculate exactly how many items we are expecting back
+        int numItemsSent = items.size() / 2;
+
+        for (int i = 0; i < numItemsSent; i++) {
+            // Step 5c: Read length L
+            byte len = din.readByte();
+
+            // Step 5c: Read Description D
+            byte[] stringBytes = new byte[len];
+            din.readFully(stringBytes);
+            String itemName = new String(stringBytes);
+
+            // Step 5b: Read Total Cost TC
+            int itemCost = din.readInt();
+
+            // Step 5d: Read Quantity Qi
+            short quantityReceived = din.readShort();
+
+            itemCount++;
+            double unitCost = (quantityReceived > 0) ? (itemCost / (double)quantityReceived) : 0;
+
+            System.out.printf("%-10d %-20s $%-11.2f %-10d $%-14.2f\n", 
+                itemCount, itemName, unitCost / 100.0, (int)quantityReceived, itemCost / 100.0);
         }
-
-        // Step 5c: Read exactly 'len' bytes for the description string D
-        byte[] stringBytes = new byte[len];
-        din.readFully(stringBytes);
-        String itemName = new String(stringBytes);
-
-        // Step 5b: Read the Total Cost (TC)
-        int itemCost = din.readInt();
-
-        // Step 5d: Read the Quantity (Qi)
-        short quantityReceived = din.readShort();
-
-        itemCount++;
-
-        // Calculate unit cost (itemCost is already the total for that quantity)
-        double unitCost = (quantityReceived > 0) ? (itemCost / (double)quantityReceived) : 0;
-
-        // Print the row using the name provided by the server
-        System.out.printf("%-10d %-20s $%-11.2f %-10d $%-14.2f\n", 
-            itemCount, 
-            itemName, 
-            unitCost / 100.0, 
-            (int)quantityReceived, 
-            itemCost / 100.0);
     }
 
     // Print the Final Total
     System.out.println("------------------------------------------------------------------");
     int totalAmount = din.readInt();
+    short trailer = din.readShort();  // The -1 trailer (0xFFFF)
     System.out.printf("%45s %-10s $%.2f\n", "", "Total", totalAmount / 100.0);
 
     sock.close();
