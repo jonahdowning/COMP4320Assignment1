@@ -42,6 +42,7 @@ public class myFirstTCPClient {
     items.add((short)-1);
     
     // 2 bytes for RequestID + 2 bytes for TML + (number of elements * 2 bytes)
+    //tml = Total Message Length
     short tml = (short) (4 + (items.size() * 2));
     
     ByteBuffer buffer = ByteBuffer.allocate(tml);
@@ -72,17 +73,56 @@ public class myFirstTCPClient {
     out.write(arrayA);
     out.flush();
 
-    // Wait for a response (Requirement Step 6)
-    // For now, we just close to see if the client runs without errors
+
+    // STEP 6: Wait for a response from the server
+    InputStream in = sock.getInputStream();
+    DataInputStream din = new DataInputStream(in); // Helps read shorts and ints easily
+
+    // Read the Header first (4 bytes total)
+    //res = response
+    short resRequestID = din.readShort(); // 2 bytes
+    short resTML = din.readShort();       // 2 bytes
+
+    // 2. CHECK FOR TML MISMATCH ERROR (-1)
+    if (resTML == -1 || resTML == (short)0xFFFF) {
+        System.out.println("Error: Server reported a TML Mismatch in the request.");
+        sock.close();
+        return; 
+    }
+
+    // 3. Continue reading normally if TML is valid
+    short resNumItems = din.readShort();
+    // Print the Header
+    System.out.println("------------------------------------------------------------------");
+    System.out.printf("%-10s %-20s %-12s %-10s %-15s\n", "Item #", "Description", "Unit Cost", "Quantity", "Cost Per Item");
+    System.out.println("------------------------------------------------------------------");
+
+    // Loop through the received item costs
+    for (int i = 0; i < resNumItems; i++) {
+        int itemCost = din.readInt();
+        
+        // We need the original quantity for the table. 
+        // It's stored in your 'items' list from earlier:
+        short originalQuantity = items.get(i * 2); 
+        short originalCode = items.get(i * 2 + 1);
+        
+        // Calculate unit cost for the table
+        int unitCost = (originalQuantity > 0) ? (itemCost / originalQuantity) : 0;
+
+        // Print the row (converting cents to dollars)
+        System.out.printf("%-10d %-20s $%-11.2f %-10d $%-14.2f\n", 
+            (i + 1), 
+            "Code " + originalCode, // Description
+            unitCost / 100.0, 
+            (int)originalQuantity, 
+            itemCost / 100.0);
+    }
+
+    // Print the Final Total
+    System.out.println("------------------------------------------------------------------");
+    int totalAmount = din.readInt();
+    System.out.printf("%45s %-10s $%.2f\n", "", "Total", totalAmount / 100.0);
+
     sock.close();
-
-
-    //System.out.println("Displaying order: " + q + " " + c); // Display order just to check what we send
-    // System.out.println("Sending Friend (Binary)");
-    // OutputStream out = sock.getOutputStream(); // Get a handle onto Output Stream
-    // out.write(itemCode.getBytes()); // Send item code as bytes
-    // out.write(quantity); // Send quantity as a byte (note: this will only work for
-    // sock.close();
-
   }
 }
