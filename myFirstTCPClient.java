@@ -90,31 +90,75 @@ public class myFirstTCPClient {
         return; 
     }
 
+    // // 3. Continue reading normally if TML is valid
+    // short resNumItems = din.readShort();
+    // // Print the Header
+    // System.out.println("------------------------------------------------------------------");
+    // System.out.printf("%-10s %-20s %-12s %-10s %-15s\n", "Item #", "Description", "Unit Cost", "Quantity", "Cost Per Item");
+    // System.out.println("------------------------------------------------------------------");
+
+    // // Loop through the received item costs
+    // for (int i = 0; i < resNumItems; i++) {
+    //     int itemCost = din.readInt();
+        
+    //     // We need the original quantity for the table. 
+    //     // It's stored in your 'items' list from earlier:
+    //     short originalQuantity = items.get(i * 2); 
+    //     short originalCode = items.get(i * 2 + 1);
+        
+    //     // Calculate unit cost for the table
+    //     int unitCost = (originalQuantity > 0) ? (itemCost / originalQuantity) : 0;
+
+    //     // Print the row (converting cents to dollars)
+    //     System.out.printf("%-10d %-20s $%-11.2f %-10d $%-14.2f\n", 
+    //         (i + 1), 
+    //         "Code " + originalCode, // Description
+    //         unitCost / 100.0, 
+    //         (int)originalQuantity, 
+    //         itemCost / 100.0);
+    // }
+
     // 3. Continue reading normally if TML is valid
-    short resNumItems = din.readShort();
-    // Print the Header
     System.out.println("------------------------------------------------------------------");
     System.out.printf("%-10s %-20s %-12s %-10s %-15s\n", "Item #", "Description", "Unit Cost", "Quantity", "Cost Per Item");
     System.out.println("------------------------------------------------------------------");
 
-    // Loop through the received item costs
-    for (int i = 0; i < resNumItems; i++) {
-        int itemCost = din.readInt();
-        
-        // We need the original quantity for the table. 
-        // It's stored in your 'items' list from earlier:
-        short originalQuantity = items.get(i * 2); 
-        short originalCode = items.get(i * 2 + 1);
-        
-        // Calculate unit cost for the table
-        int unitCost = (originalQuantity > 0) ? (itemCost / originalQuantity) : 0;
+    int itemCount = 0;
 
-        // Print the row (converting cents to dollars)
+    // This loop reads items until the server sends the trailer (-1)
+    while (true) {
+        // Step 5c: Read the length L of the description. 
+        // We read it as a byte.
+        byte len = din.readByte();
+
+        // Check if this is the trailer (-1). 
+        // If the server sends 0xFFFF for a short, the first byte read is -1.
+        if (len == -1) {
+            break; 
+        }
+
+        // Step 5c: Read exactly 'len' bytes for the description string D
+        byte[] stringBytes = new byte[len];
+        din.readFully(stringBytes);
+        String itemName = new String(stringBytes);
+
+        // Step 5b: Read the Total Cost (TC)
+        int itemCost = din.readInt();
+
+        // Step 5d: Read the Quantity (Qi)
+        short quantityReceived = din.readShort();
+
+        itemCount++;
+
+        // Calculate unit cost (itemCost is already the total for that quantity)
+        double unitCost = (quantityReceived > 0) ? (itemCost / (double)quantityReceived) : 0;
+
+        // Print the row using the name provided by the server
         System.out.printf("%-10d %-20s $%-11.2f %-10d $%-14.2f\n", 
-            (i + 1), 
-            "Code " + originalCode, // Description
+            itemCount, 
+            itemName, 
             unitCost / 100.0, 
-            (int)originalQuantity, 
+            (int)quantityReceived, 
             itemCost / 100.0);
     }
 
