@@ -136,19 +136,20 @@ public class myFirstTCPClient {
       calculatedTotalCost += itemCost;
 
       respItemCount++;
-      double unitCostDisplay = unitCostShort / 100.0;
-      double itemCostDisplay = itemCost / 100.0;
 
-      System.out.printf("%-10d %-20s $%-11.2f %-10d $%-14.2f\n", respItemCount, itemName, unitCostDisplay,
-          (int) quantityReceived, itemCostDisplay);
+      System.out.printf("%-10d %-20s $%-11d %-10d $%-14d\n", 
+        respItemCount, 
+        itemName, 
+        (int) unitCostShort,     // Cast to int for %d
+        (int) quantityReceived, 
+        (int) itemCost);         // Use integer cost
     }
 
     // Print the Final Total
     System.out.println("------------------------------------------------------------------");
 
     short trailer = din.readShort(); // The -1 trailer (0xFFFF)
-    System.out.printf("%45s %-10s $%.2f\n", "", "Total", serverTotalCost / 100.0);
-
+    System.out.printf("%45s %-10s $%d\n", "", "Total", (int) serverTotalCost);
     // Step 6 Validation: Check if TC equals sum of (CS * Q)
     if (serverTotalCost != calculatedTotalCost) {
       System.out.println("\nError: the total cost in the response does not match the total computed by the client.");

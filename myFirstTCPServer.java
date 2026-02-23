@@ -130,7 +130,7 @@ public class myFirstTCPServer {
         for (OrderItem item : request.items) {
             Object[] data = itemDataMap.get(item.code);
             String description = (data != null) ? (String) data[1] : "Article Not Available";
-            short unitPrice = (short) ((data != null) ? (int) data[0] : 0);
+            short unitPrice = (short) (((data != null) ? (int) data[0] : 0));
 
             int cost = item.quantity * unitPrice;
             totalCost += cost;
