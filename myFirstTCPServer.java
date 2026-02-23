@@ -11,7 +11,7 @@ public class myFirstTCPServer {
     public static void main(String args[]) throws Exception {
         if (args.length != 1) {
             throw new IllegalArgumentException("Parameter(s): <Port>");
-        }
+        } else {System.out.println("Server is running. Waiting for client request...");}
 
         int port = Integer.parseInt(args[0]);
         // load item data from CSV into a Map for quick lookup
