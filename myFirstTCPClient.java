@@ -16,69 +16,91 @@ public class myFirstTCPClient {
     int destPort = Integer.parseInt(args[1]); // Destination port
     Socket sock = new Socket(destAddr, destPort);
 
-    // TAKE INPUTS
-    short requestID = 100;
-    List<Short> items = collectItems();
+    Scanner scanner = new Scanner(System.in);
+    short requestID = 0;
 
-    // PRINT HEX ARRAY
-    byte[] arrayA = getArrayA(items, requestID);
-    System.out.print("Array A (Hex): ");
-    for (byte b : arrayA) {
-      System.out.printf("0x%02X ", b);
-    }
-    System.out.println();
+    while (true) {
+      requestID++;
+      System.out.println("\n--- Starting Request #" + requestID + " ---");
 
-    // SEND REQUEST TO SERVER
-    OutputStream out = sock.getOutputStream();
-    out.write(arrayA);
-    out.flush();
-
-    // READ RESPONSE FROM SERVER
-    InputStream in = sock.getInputStream();
-    byte[] header = new byte[4];
-    int bytesRead = 0;
-    while (bytesRead < 4) {
-      int res = in.read(header, bytesRead, 4 - bytesRead);
-      if (res == -1)
+      // TAKE INPUTS
+      List<Short> items = collectItems(scanner);
+      if (items.size() == 1) { // Only contains the -1 terminator
         break;
-      bytesRead += res;
-    }
+      }
 
-    int tml = Short.toUnsignedInt(ByteBuffer.wrap(header).getShort(2));
-    byte[] responseArray = new byte[tml];
-    System.arraycopy(header, 0, responseArray, 0, 4);
+      // PRINT HEX ARRAY
+      byte[] arrayA = getArrayA(items, requestID);
+      System.out.print("Array A (Hex): ");
+      for (byte b : arrayA) {
+        System.out.printf("0x%02X ", b);
+      }
+      System.out.println();
 
-    int current = 4;
-    while (current < tml) {
-      int res = in.read(responseArray, current, tml - current);
-      if (res == -1)
+      // SEND REQUEST TO SERVER
+      OutputStream out = sock.getOutputStream();
+      out.write(arrayA);
+      out.flush();
+
+      // READ RESPONSE FROM SERVER
+      InputStream in = sock.getInputStream();
+      byte[] header = new byte[4];
+      int bytesRead = 0;
+      while (bytesRead < 4) {
+        int res = in.read(header, bytesRead, 4 - bytesRead);
+        if (res == -1)
+          break;
+        bytesRead += res;
+      }
+      if (bytesRead < 4) break; // Connection closed
+
+      int tml = Short.toUnsignedInt(ByteBuffer.wrap(header).getShort(2));
+      byte[] responseArray = new byte[tml];
+      System.arraycopy(header, 0, responseArray, 0, 4);
+
+      int current = 4;
+      while (current < tml) {
+        int res = in.read(responseArray, current, tml - current);
+        if (res == -1)
+          break;
+        current += res;
+      }
+
+      System.out.print("Server Response (Hex): ");
+      for (byte b : responseArray) {
+        System.out.printf("0x%02X ", b);
+      }
+      System.out.println();
+
+      DataInputStream din = new DataInputStream(new ByteArrayInputStream(responseArray)); // Helps read shorts and intseasily
+
+      // Read the Header first (4 bytes total)
+      short respRequestID = din.readShort(); // 2 bytes
+      if (respRequestID != requestID) {
+        System.out.println("Error: Request ID mismatch. Expected " + requestID + " but got " + respRequestID);
         break;
-      current += res;
+      }
+
+      short respTML = din.readShort(); // 2 bytes
+
+      // Data Validation: Check if the TML is valid
+      if (respTML == -1 || respTML == (short) 0xFFFF) {
+        System.out.println("Error: Server reported a TML Mismatch in the request.");
+        sock.close();
+        return;
+      }
+      // READ AND PRINT THE RESPONSE
+      int expectedItemsSent = items.size() / 2;
+      readAndPrintResponse(expectedItemsSent, din);
+
+      System.out.print("Send another request? (y/n): ");
+      if (!scanner.next().equalsIgnoreCase("y")) {
+        break;
+      }
     }
-
-    System.out.print("Server Response (Hex): ");
-    for (byte b : responseArray) {
-      System.out.printf("0x%02X ", b);
-    }
-    System.out.println();
-
-    DataInputStream din = new DataInputStream(new ByteArrayInputStream(responseArray)); // Helps read shorts and intseasily
-
-    // Read the Header first (4 bytes total)
-    short respRequestID = din.readShort(); // 2 bytes; todo: does this need to be checked against the original requestID? what if it doesn't match?
-    short respTML = din.readShort(); // 2 bytes
-
-    // Data Validation: Check if the TML is valid
-    if (respTML == -1 || respTML == (short) 0xFFFF) {
-      System.out.println("Error: Server reported a TML Mismatch in the request.");
-      sock.close();
-      return;
-    }
-    // READ AND PRINT THE RESPONSE
-    int expectedItemsSent = items.size() / 2;
-    readAndPrintResponse(expectedItemsSent, din);
 
     sock.close();
+    scanner.close();
   }
 
   private static void readAndPrintResponse(int expectedItemsSent, DataInputStream din) throws IOException {
@@ -156,8 +178,7 @@ public class myFirstTCPClient {
     return arrayA;
   }
 
-  private static List<Short> collectItems() {
-    Scanner sc = new Scanner(System.in);
+  private static List<Short> collectItems(Scanner sc) {
     List<Short> items = new ArrayList<>();
     while (true) {
       System.out.print("Enter a quantity number between 0-32767 (or -1 to finish): ");
@@ -173,7 +194,6 @@ public class myFirstTCPClient {
       items.add(quantity);
       items.add(code);
     }
-    sc.close();
 
     // Add the -1 terminator for quantity
     items.add((short) -1);

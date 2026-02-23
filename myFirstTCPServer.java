@@ -22,22 +22,30 @@ public class myFirstTCPServer {
                 DataInputStream din = new DataInputStream(clntSock.getInputStream());
                 OutputStream out = clntSock.getOutputStream()) {
 
-            // READ REQUEST FROM CLIENT
-            ClientRequest request = parseRequest(din);
+            while (true) {
+                // READ REQUEST FROM CLIENT
+                ClientRequest request;
+                try {
+                    request = parseRequest(din);
+                } catch (EOFException e) {
+                    System.out.println("Client disconnected.");
+                    break;
+                }
 
-            // TML Validation
-            if (!validateTML(request)) {
-                sendErrorResponse(out, request.requestID);
-                return; // Stop processing
+                // TML Validation
+                if (!validateTML(request)) {
+                    sendErrorResponse(out, request.requestID);
+                    break; // Stop processing on error
+                }
+
+                // BUILD RESPONSE
+                byte[] finalResponseArray = buildResponse(request, itemDataMap);
+
+                // PRINT AND SEND
+                printHexDump("Server Response (Hex): ", finalResponseArray);
+                out.write(finalResponseArray);
+                out.flush();
             }
-
-            // BUILD RESPONSE
-            byte[] finalResponseArray = buildResponse(request, itemDataMap);
-
-            // PRINT AND SEND
-            printHexDump("Server Response (Hex): ", finalResponseArray);
-            out.write(finalResponseArray);
-            out.flush();
         }
     }
 
