@@ -26,7 +26,7 @@ public class myFirstTCPServer {
                 // READ REQUEST FROM CLIENT
                 ClientRequest request;
                 try {
-                    request = parseRequest(din);
+                    request = parseRequest(din, clntSock);
                 } catch (EOFException e) {
                     System.out.println("Client disconnected.");
                     break;
@@ -60,18 +60,34 @@ public class myFirstTCPServer {
      *         ordered items
      * @throws IOException
      */
-    private static ClientRequest parseRequest(DataInputStream din) throws IOException {
-        short requestID = din.readShort();
-        short tml = din.readShort();
+    private static ClientRequest parseRequest(DataInputStream din, Socket clntSock) throws IOException {
+        byte[] header = new byte[4];
+        din.readFully(header);
+
+        ByteBuffer bb = ByteBuffer.wrap(header);
+        short requestID = bb.getShort();
+        short tml = bb.getShort();
+
+        System.out.println("Client IP: " + clntSock.getInetAddress().getHostAddress() + ", Port: " + clntSock.getPort());
         System.out.println("Processing Request #" + requestID + " (TML: " + tml + ")");
 
+        int bodyLen = Short.toUnsignedInt(tml) - 4;
+        byte[] body = new byte[bodyLen];
+        din.readFully(body);
+
+        byte[] fullRequest = new byte[Short.toUnsignedInt(tml)];
+        System.arraycopy(header, 0, fullRequest, 0, 4);
+        System.arraycopy(body, 0, fullRequest, 4, bodyLen);
+        printHexDump("ArrayA (Hex): ", fullRequest);
+
+        DataInputStream bodyDin = new DataInputStream(new ByteArrayInputStream(body));
         List<OrderItem> items = new ArrayList<>();
         while (true) {
-            short quantity = din.readShort();
+            short quantity = bodyDin.readShort();
             if (quantity == -1) {
                 break;
             }
-            short code = din.readShort();
+            short code = bodyDin.readShort();
             items.add(new OrderItem(code, quantity));
 
             System.out.println("Order received: Q=" + quantity + ", C=" + code);
@@ -113,7 +129,7 @@ public class myFirstTCPServer {
         for (OrderItem item : request.items) {
             Object[] data = itemDataMap.get(item.code);
             String description = (data != null) ? (String) data[1] : "Article Not Available";
-            short unitPrice = (short) ((data != null) ? (int) data[0] * 100 : 0);
+            short unitPrice = (short) ((data != null) ? (int) data[0] : 0);
 
             int cost = item.quantity * unitPrice;
             totalCost += cost;
