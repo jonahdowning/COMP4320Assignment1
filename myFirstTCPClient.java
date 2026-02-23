@@ -34,7 +34,33 @@ public class myFirstTCPClient {
 
 
     // READ RESPONSE FROM SERVER
-    DataInputStream din = new DataInputStream(sock.getInputStream()); // Helps read shorts and ints easily
+    InputStream in = sock.getInputStream();
+    byte[] header = new byte[4];
+    int bytesRead = 0;
+    while (bytesRead < 4) {
+        int res = in.read(header, bytesRead, 4 - bytesRead);
+        if (res == -1) break;
+        bytesRead += res;
+    }
+
+    int tml = Short.toUnsignedInt(ByteBuffer.wrap(header).getShort(2));
+    byte[] responseArray = new byte[tml];
+    System.arraycopy(header, 0, responseArray, 0, 4);
+
+    int current = 4;
+    while (current < tml) {
+        int res = in.read(responseArray, current, tml - current);
+        if (res == -1) break;
+        current += res;
+    }
+
+    System.out.print("Server Response (Hex): ");
+    for (byte b : responseArray) {
+        System.out.printf("0x%02X ", b);
+    }
+    System.out.println();
+
+    DataInputStream din = new DataInputStream(new ByteArrayInputStream(responseArray)); // Helps read shorts and ints easily
 
     // Read the Header first (4 bytes total)
     short respRequestID = din.readShort(); // 2 bytes; todo: does this need to be checked against the original requestID? what if it doesn't match?
@@ -54,12 +80,16 @@ public class myFirstTCPClient {
   }
 
   private static void readAndPrintResponse(int expectedItemsSent, DataInputStream din) throws IOException {
+    // Read Total Cost TC (4 bytes) - Located in Header per PDF
+    int serverTotalCost = din.readInt();
+
     System.out.println("\n------------------------------------------------------------------");
     System.out.printf("%-10s %-20s %-12s %-10s %-15s\n", "Item #", "Description", "Unit Cost", "Quantity", "Cost Per Item");
     System.out.println("------------------------------------------------------------------");
     
     // Calculate exactly how many items we are expecting back
     int respItemCount = 0;
+    int calculatedTotalCost = 0;
 
     for (int i = 0; i < expectedItemsSent; i++) {
         //Read length L
@@ -70,23 +100,33 @@ public class myFirstTCPClient {
         din.readFully(stringBytes);
         String itemName = new String(stringBytes);
 
-        // Read Total Cost TC
-        int itemCost = din.readInt();
-
-        // Read Quantity Qi
+        // Read Unit Cost CS (2 bytes)
+        short unitCostShort = din.readShort();
+        
+        // Read Quantity Qi (2 bytes)
         short quantityReceived = din.readShort();
 
-        respItemCount++;
-        double unitCost = (quantityReceived > 0) ? (itemCost / (double)quantityReceived) : 0;
+        // Calculate Item Cost
+        int itemCost = unitCostShort * quantityReceived;
+        calculatedTotalCost += itemCost;
 
-        System.out.printf("%-10d %-20s $%-11.2f %-10d $%-14.2f\n", respItemCount, itemName, unitCost / 100.0, (int)quantityReceived, itemCost / 100.0);
+        respItemCount++;
+        double unitCostDisplay = unitCostShort / 100.0;
+        double itemCostDisplay = itemCost / 100.0;
+
+        System.out.printf("%-10d %-20s $%-11.2f %-10d $%-14.2f\n", respItemCount, itemName, unitCostDisplay, (int)quantityReceived, itemCostDisplay);
     }
 
     // Print the Final Total
     System.out.println("------------------------------------------------------------------");
-    int totalAmount = din.readInt();
+    
     short trailer = din.readShort();  // The -1 trailer (0xFFFF)
-    System.out.printf("%45s %-10s $%.2f\n", "", "Total", totalAmount / 100.0);
+    System.out.printf("%45s %-10s $%.2f\n", "", "Total", serverTotalCost / 100.0);
+
+    // Step 6 Validation: Check if TC equals sum of (CS * Q)
+    if (serverTotalCost != calculatedTotalCost) {
+        System.out.println("\nError: the total cost in the response does not match the total computed by the client.");
+    }
   }
 
   private static byte[] getArrayA(List<Short> items, short requestID) {
