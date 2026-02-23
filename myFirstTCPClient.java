@@ -10,44 +10,93 @@ public class myFirstTCPClient {
   public static void main(String args[]) throws Exception {
 
     // SETUP SERVER CONNECTION LOGIC
-    
-    if (args.length != 2)  // Test for correct # of args
-      throw new IllegalArgumentException("Parameter(s): <Destination> <Port>");
-
+    if (args.length != 2) throw new IllegalArgumentException("Parameter(s): <Destination> <Port>");
     InetAddress destAddr = InetAddress.getByName(args[0]);  // Destination address
     int destPort = Integer.parseInt(args[1]);               // Destination port
-
     Socket sock = new Socket(destAddr, destPort);
 
     // TAKE INPUTS
-    Scanner sc = new Scanner(System.in);
-    List<Short> items = new ArrayList<>(); 
     short requestID = 101; 
+    List<Short> items = collectItems();
+    
+    //PRINT HEX ARRAY
+    byte[] arrayA = getArrayA(items, requestID);
+    System.out.print("Array A (Hex): ");
+    for (byte b : arrayA) {
+        System.out.printf("0x%02X ", b);
+    }
+    System.out.println();
 
-    while (true) {
-        System.out.print("Enter a quantity number between 0-32767 (or -1 to finish): ");
-        short q = sc.nextShort(); 
-        
-        if (q == -1) { 
-            break;
-        }
-        
-        System.out.print("Enter a description code between 0-32767: ");
-        short c = sc.nextShort(); 
-        
-        items.add(q);
-        items.add(c);
+    // SEND REQUEST TO SERVER
+    OutputStream out = sock.getOutputStream();
+    out.write(arrayA);
+    out.flush();
+
+
+    // READ RESPONSE FROM SERVER
+    DataInputStream din = new DataInputStream(sock.getInputStream()); // Helps read shorts and ints easily
+
+    // Read the Header first (4 bytes total)
+    short respRequestID = din.readShort(); // 2 bytes; todo: does this need to be checked against the original requestID? what if it doesn't match?
+    short respTML = din.readShort();       // 2 bytes
+
+    //Data Validation: Check if the TML is valid
+    if (respTML == -1 || respTML == (short)0xFFFF) {
+        System.out.println("Error: Server reported a TML Mismatch in the request.");
+        sock.close();
+        return; 
+    }
+    // READ AND PRINT THE RESPONSE
+    int expectedItemsSent = items.size() / 2;
+    readAndPrintResponse(expectedItemsSent, din);
+
+    sock.close();
+  }
+
+  private static void readAndPrintResponse(int expectedItemsSent, DataInputStream din) throws IOException {
+    System.out.println("\n------------------------------------------------------------------");
+    System.out.printf("%-10s %-20s %-12s %-10s %-15s\n", "Item #", "Description", "Unit Cost", "Quantity", "Cost Per Item");
+    System.out.println("------------------------------------------------------------------");
+    
+    // Calculate exactly how many items we are expecting back
+    int respItemCount = 0;
+
+    for (int i = 0; i < expectedItemsSent; i++) {
+        //Read length L
+        byte len = din.readByte();
+
+        // Read Description D
+        byte[] stringBytes = new byte[len];
+        din.readFully(stringBytes);
+        String itemName = new String(stringBytes);
+
+        // Read Total Cost TC
+        int itemCost = din.readInt();
+
+        // Read Quantity Qi
+        short quantityReceived = din.readShort();
+
+        respItemCount++;
+        double unitCost = (quantityReceived > 0) ? (itemCost / (double)quantityReceived) : 0;
+
+        System.out.printf("%-10d %-20s $%-11.2f %-10d $%-14.2f\n", respItemCount, itemName, unitCost / 100.0, (int)quantityReceived, itemCost / 100.0);
     }
 
-    items.add((short)-1);
-    
-    // 2 bytes for RequestID + 2 bytes for TML + (number of elements * 2 bytes)
+    // Print the Final Total
+    System.out.println("------------------------------------------------------------------");
+    int totalAmount = din.readInt();
+    short trailer = din.readShort();  // The -1 trailer (0xFFFF)
+    System.out.printf("%45s %-10s $%.2f\n", "", "Total", totalAmount / 100.0);
+  }
+
+  private static byte[] getArrayA(List<Short> items, short requestID) {
+    // (2 bytes for RequestID) + (2 bytes for TML) + (number of elements * 2 bytes)
     //tml = Total Message Length
     short tml = (short) (4 + (items.size() * 2));
     
     ByteBuffer buffer = ByteBuffer.allocate(tml);
 
-    // Field 1: Request # [cite: 33]
+    // Field 1: Request #
     buffer.putShort(requestID);
 
     // Field 2: TML 
@@ -60,115 +109,31 @@ public class myFirstTCPClient {
 
     // Convert the buffer to a standard byte array
     byte[] arrayA = buffer.array();
-
-    //print in hexidecimal format
-    System.out.print("Array A (Hex): ");
-    for (byte b : arrayA) {
-        System.out.printf("0x%02X ", b);
-    }
-    System.out.println();
-
-    // Send to server
-    OutputStream out = sock.getOutputStream();
-    out.write(arrayA);
-    out.flush();
-
-
-    // STEP 6: Wait for a response from the server
-    InputStream in = sock.getInputStream();
-    DataInputStream din = new DataInputStream(in); // Helps read shorts and ints easily
-
-    // Read the Header first (4 bytes total)
-    //res = response
-    short resRequestID = din.readShort(); // 2 bytes
-    short resTML = din.readShort();       // 2 bytes
-
-    // 2. CHECK FOR TML MISMATCH ERROR (-1)
-    if (resTML == -1 || resTML == (short)0xFFFF) {
-        System.out.println("Error: Server reported a TML Mismatch in the request.");
-        sock.close();
-        return; 
-    }
-
-    // // 3. Continue reading normally if TML is valid
-    // short resNumItems = din.readShort();
-    // // Print the Header
-    // System.out.println("------------------------------------------------------------------");
-    // System.out.printf("%-10s %-20s %-12s %-10s %-15s\n", "Item #", "Description", "Unit Cost", "Quantity", "Cost Per Item");
-    // System.out.println("------------------------------------------------------------------");
-
-    // // Loop through the received item costs
-    // for (int i = 0; i < resNumItems; i++) {
-    //     int itemCost = din.readInt();
-        
-    //     // We need the original quantity for the table. 
-    //     // It's stored in your 'items' list from earlier:
-    //     short originalQuantity = items.get(i * 2); 
-    //     short originalCode = items.get(i * 2 + 1);
-        
-    //     // Calculate unit cost for the table
-    //     int unitCost = (originalQuantity > 0) ? (itemCost / originalQuantity) : 0;
-
-    //     // Print the row (converting cents to dollars)
-    //     System.out.printf("%-10d %-20s $%-11.2f %-10d $%-14.2f\n", 
-    //         (i + 1), 
-    //         "Code " + originalCode, // Description
-    //         unitCost / 100.0, 
-    //         (int)originalQuantity, 
-    //         itemCost / 100.0);
-    // }
-
-    // 3. Continue reading normally if TML is valid
-    System.out.println("------------------------------------------------------------------");
-    System.out.printf("%-10s %-20s %-12s %-10s %-15s\n", "Item #", "Description", "Unit Cost", "Quantity", "Cost Per Item");
-    System.out.println("------------------------------------------------------------------");
-
-    int itemCount = 0;
-
-    
-    
-
-    if (resTML == -1 || resTML == (short)0xFFFF) {
-        System.out.println("Error: Server reported a TML Mismatch.");
-    } 
-
-    else {
-        System.out.println("\n------------------------------------------------------------------");
-        System.out.printf("%-10s %-20s %-12s %-10s %-15s\n", "Item #", "Description", "Unit Cost", "Quantity", "Cost Per Item");
-        System.out.println("------------------------------------------------------------------");
-
-        // Calculate exactly how many items we are expecting back
-        int numItemsSent = items.size() / 2;
-
-        for (int i = 0; i < numItemsSent; i++) {
-            // Step 5c: Read length L
-            byte len = din.readByte();
-
-            // Step 5c: Read Description D
-            byte[] stringBytes = new byte[len];
-            din.readFully(stringBytes);
-            String itemName = new String(stringBytes);
-
-            // Step 5b: Read Total Cost TC
-            int itemCost = din.readInt();
-
-            // Step 5d: Read Quantity Qi
-            short quantityReceived = din.readShort();
-
-            itemCount++;
-            double unitCost = (quantityReceived > 0) ? (itemCost / (double)quantityReceived) : 0;
-
-            System.out.printf("%-10d %-20s $%-11.2f %-10d $%-14.2f\n", 
-                itemCount, itemName, unitCost / 100.0, (int)quantityReceived, itemCost / 100.0);
-        }
-    }
-
-    // Print the Final Total
-    System.out.println("------------------------------------------------------------------");
-    int totalAmount = din.readInt();
-    short trailer = din.readShort();  // The -1 trailer (0xFFFF)
-    System.out.printf("%45s %-10s $%.2f\n", "", "Total", totalAmount / 100.0);
-
-    sock.close();
+    return arrayA;
   }
+
+  private static List<Short> collectItems() {
+    Scanner sc = new Scanner(System.in);
+    List<Short> items = new ArrayList<>();
+    while (true) {
+        System.out.print("Enter a quantity number between 0-32767 (or -1 to finish): ");
+        short quantity = sc.nextShort(); 
+        
+        if (quantity == -1) { 
+            break;
+        }
+        
+        System.out.print("Enter a description code between 0-32767: ");
+        short code = sc.nextShort(); 
+        
+        items.add(quantity);
+        items.add(code);
+    }
+    sc.close();
+
+    // Add the -1 terminator for quantity
+    items.add((short)-1);
+    return items;
+  }
+  
 }
