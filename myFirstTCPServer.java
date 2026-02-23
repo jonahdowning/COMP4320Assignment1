@@ -14,12 +14,13 @@ public class myFirstTCPServer {
         }
 
         int port = Integer.parseInt(args[0]);
+        // load item data from CSV into a Map for quick lookup
         Map<Short, Object[]> itemDataMap = getItemDataMap();
 
         try (ServerSocket servSock = new ServerSocket(port);
-             Socket clntSock = servSock.accept();
-             DataInputStream din = new DataInputStream(clntSock.getInputStream());
-             OutputStream out = clntSock.getOutputStream()) {
+                Socket clntSock = servSock.accept();
+                DataInputStream din = new DataInputStream(clntSock.getInputStream());
+                OutputStream out = clntSock.getOutputStream()) {
 
             // READ REQUEST FROM CLIENT
             ClientRequest request = parseRequest(din);
@@ -42,6 +43,15 @@ public class myFirstTCPServer {
 
     // --- Extracted Methods ---
 
+    /**
+     * Parses the client's request from the DataInputStream and constructs a
+     * ClientRequest object.
+     * 
+     * @param din DataInputStream to read the client's request
+     * @return ClientRequest object containing the request ID, TML, and list of
+     *         ordered items
+     * @throws IOException
+     */
     private static ClientRequest parseRequest(DataInputStream din) throws IOException {
         short requestID = din.readShort();
         short tml = din.readShort();
@@ -55,7 +65,7 @@ public class myFirstTCPServer {
             }
             short code = din.readShort();
             items.add(new OrderItem(code, quantity));
-            
+
             System.out.println("Order received: Q=" + quantity + ", C=" + code);
         }
 
@@ -68,7 +78,8 @@ public class myFirstTCPServer {
         int expectedTML = 4 + (expectedItemCt * 4) + 2;
 
         if (Short.toUnsignedInt(request.tml) != expectedTML) {
-            System.out.println("Error: TML Mismatch! Expected " + Short.toUnsignedInt(request.tml) + " but got " + expectedTML);
+            System.out.println(
+                    "Error: TML Mismatch! Expected " + Short.toUnsignedInt(request.tml) + " but got " + expectedTML);
             return false;
         }
         return true;
@@ -77,7 +88,7 @@ public class myFirstTCPServer {
     private static void sendErrorResponse(OutputStream out, short requestID) throws IOException {
         ByteBuffer bb = ByteBuffer.allocate(4);
         bb.putShort(requestID);
-        bb.putShort((short) -1); // Error code as per PDF
+        bb.putShort((short) -1);
         out.write(bb.array());
         out.flush();
         System.out.println("Sent Error Response: RequestID " + requestID + ", -1");
@@ -94,8 +105,6 @@ public class myFirstTCPServer {
         for (OrderItem item : request.items) {
             Object[] data = itemDataMap.get(item.code);
             String description = (data != null) ? (String) data[1] : "Article Not Available";
-            // PDF says CS is a short integer. Assuming CSV price is in dollars, converting to cents for calculation?
-            // Keeping your logic of * 100, but casting to short as per protocol.
             short unitPrice = (short) ((data != null) ? (int) data[0] * 100 : 0);
 
             int cost = item.quantity * unitPrice;
@@ -103,8 +112,8 @@ public class myFirstTCPServer {
 
             itemsDos.writeByte((byte) description.length());
             itemsDos.writeBytes(description);
-            itemsDos.writeShort(unitPrice);     // CS (Unit Cost)
-            itemsDos.writeShort(item.quantity); // Q (Quantity)
+            itemsDos.writeShort(unitPrice);
+            itemsDos.writeShort(item.quantity);
         }
 
         // Step 2: Build Final Message
@@ -113,17 +122,17 @@ public class myFirstTCPServer {
 
         dout.writeShort(request.requestID);
         dout.writeShort((short) 0); // Placeholder for TML
-        dout.writeInt(totalCost);   // TC (Total Cost) goes in Header
-        
+        dout.writeInt(totalCost); // TC (Total Cost) goes in Header
+
         dout.write(itemsBaos.toByteArray()); // Write the items
-        
+
         dout.writeShort((short) -1);
         dout.flush();
 
         // Step 3: Finalize TML
         byte[] responseBytes = finalBaos.toByteArray();
         short finalTML = (short) responseBytes.length;
-        
+
         ByteBuffer.wrap(responseBytes).putShort(2, finalTML);
 
         return responseBytes;
@@ -137,6 +146,13 @@ public class myFirstTCPServer {
         System.out.println();
     }
 
+    /**
+     * Reads the data.csv file and constructs a Map of Item Code to an Object array
+     * containing Price and Description.
+     * 
+     * @return Map of Item Code to [Price, Description]
+     * @throws IOException
+     */
     private static Map<Short, Object[]> getItemDataMap() throws IOException {
         Map<Short, Object[]> itemDataMap = new HashMap<>();
 
@@ -151,7 +167,7 @@ public class myFirstTCPServer {
                 String description = parts[1].trim();
                 int price = Integer.parseInt(parts[2].trim());
 
-                itemDataMap.put(code, new Object[]{price, description});
+                itemDataMap.put(code, new Object[] { price, description });
             }
         }
         return itemDataMap;
