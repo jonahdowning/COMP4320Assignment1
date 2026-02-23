@@ -28,7 +28,7 @@ public class myFirstTCPServer {
                 try {
                     request = parseRequest(din, clntSock);
                 } catch (EOFException e) {
-                    System.out.println("Client disconnected.");
+                    System.out.println("\nClient disconnected.");
                     break;
                 }
 
@@ -42,7 +42,7 @@ public class myFirstTCPServer {
                 byte[] finalResponseArray = buildResponse(request, itemDataMap);
 
                 // PRINT AND SEND
-                printHexDump("Server Response (Hex): ", finalResponseArray);
+                printHexDump("\nServer Response (Hex): ", finalResponseArray);
                 out.write(finalResponseArray);
                 out.flush();
             }
@@ -68,8 +68,8 @@ public class myFirstTCPServer {
         short requestID = bb.getShort();
         short tml = bb.getShort();
 
+        System.out.println("\n--- Starting Request #" + requestID + " (TML: " + tml + ")---");
         System.out.println("Client IP: " + clntSock.getInetAddress().getHostAddress() + ", Port: " + clntSock.getPort());
-        System.out.println("Processing Request #" + requestID + " (TML: " + tml + ")");
 
         int bodyLen = Short.toUnsignedInt(tml) - 4;
         byte[] body = new byte[bodyLen];
@@ -78,10 +78,11 @@ public class myFirstTCPServer {
         byte[] fullRequest = new byte[Short.toUnsignedInt(tml)];
         System.arraycopy(header, 0, fullRequest, 0, 4);
         System.arraycopy(body, 0, fullRequest, 4, bodyLen);
-        printHexDump("ArrayA (Hex): ", fullRequest);
+        printHexDump("Array A (Hex): ", fullRequest);
 
         DataInputStream bodyDin = new DataInputStream(new ByteArrayInputStream(body));
         List<OrderItem> items = new ArrayList<>();
+        System.out.println("\nItems in Request:");
         while (true) {
             short quantity = bodyDin.readShort();
             if (quantity == -1) {
