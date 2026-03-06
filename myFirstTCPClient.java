@@ -14,7 +14,7 @@ public class myFirstTCPClient {
       throw new IllegalArgumentException("Parameter(s): <Destination> <Port>");
     InetAddress destAddr = InetAddress.getByName(args[0]); // Destination address
     int destPort = Integer.parseInt(args[1]); // Destination port
-    Socket sock = new Socket(destAddr, destPort);
+    DatagramSocket sock = new DatagramSocket();
 
     Scanner scanner = new Scanner(System.in);
     short requestID = 0;
@@ -38,33 +38,15 @@ public class myFirstTCPClient {
       System.out.println();
 
       // SEND REQUEST TO SERVER
-      OutputStream out = sock.getOutputStream();
-      out.write(arrayA);
-      out.flush();
+      DatagramPacket sendPacket = new DatagramPacket(arrayA, arrayA.length, destAddr, destPort);
+      sock.send(sendPacket);
 
       // READ RESPONSE FROM SERVER
-      InputStream in = sock.getInputStream();
-      byte[] header = new byte[4];
-      int bytesRead = 0;
-      while (bytesRead < 4) {
-        int res = in.read(header, bytesRead, 4 - bytesRead);
-        if (res == -1)
-          break;
-        bytesRead += res;
-      }
-      if (bytesRead < 4) break; // Connection closed
-
-      int tml = Short.toUnsignedInt(ByteBuffer.wrap(header).getShort(2));
-      byte[] responseArray = new byte[tml];
-      System.arraycopy(header, 0, responseArray, 0, 4);
-
-      int current = 4;
-      while (current < tml) {
-        int res = in.read(responseArray, current, tml - current);
-        if (res == -1)
-          break;
-        current += res;
-      }
+      byte[] buffer = new byte[4096];
+      DatagramPacket receivePacket = new DatagramPacket(buffer, buffer.length);
+      sock.receive(receivePacket);
+      byte[] responseArray = new byte[receivePacket.getLength()];
+      System.arraycopy(receivePacket.getData(), 0, responseArray, 0, receivePacket.getLength());
 
       System.out.print("Server Response (Hex): ");
       for (byte b : responseArray) {

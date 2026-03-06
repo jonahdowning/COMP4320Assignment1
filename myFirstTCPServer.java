@@ -17,25 +17,27 @@ public class myFirstTCPServer {
         // load item data from CSV into a Map for quick lookup
         Map<Short, Object[]> itemDataMap = getItemDataMap();
 
-        try (ServerSocket servSock = new ServerSocket(port);
-                Socket clntSock = servSock.accept();
-                DataInputStream din = new DataInputStream(clntSock.getInputStream());
-                OutputStream out = clntSock.getOutputStream()) {
+        try (DatagramSocket sock = new DatagramSocket(port)) {
+            byte[] buffer = new byte[4096];
 
             while (true) {
+                DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
+                sock.receive(packet);
+                DataInputStream din = new DataInputStream(new ByteArrayInputStream(packet.getData(), 0, packet.getLength()));
+
                 // READ REQUEST FROM CLIENT
                 ClientRequest request;
                 try {
-                    request = parseRequest(din, clntSock);
+                    request = parseRequest(din, packet.getAddress(), packet.getPort());
                 } catch (EOFException e) {
-                    System.out.println("\nClient disconnected.");
-                    break;
+                    System.out.println("\nError parsing request (EOF).");
+                    continue;
                 }
 
                 // TML Validation
                 if (!validateTML(request)) {
-                    sendErrorResponse(out, request.requestID);
-                    break; // Stop processing on error
+                    sendErrorResponse(sock, packet.getAddress(), packet.getPort(), request.requestID);
+                    continue; // Stop processing on error
                 }
 
                 // BUILD RESPONSE
@@ -43,8 +45,8 @@ public class myFirstTCPServer {
 
                 // PRINT AND SEND
                 printHexDump("\nServer Response (Hex): ", finalResponseArray);
-                out.write(finalResponseArray);
-                out.flush();
+                DatagramPacket sendPacket = new DatagramPacket(finalResponseArray, finalResponseArray.length, packet.getAddress(), packet.getPort());
+                sock.send(sendPacket);
             }
         }
     }
@@ -60,7 +62,7 @@ public class myFirstTCPServer {
      *         ordered items
      * @throws IOException
      */
-    private static ClientRequest parseRequest(DataInputStream din, Socket clntSock) throws IOException {
+    private static ClientRequest parseRequest(DataInputStream din, InetAddress addr, int port) throws IOException {
         byte[] header = new byte[4];
         din.readFully(header);
 
@@ -69,7 +71,7 @@ public class myFirstTCPServer {
         short tml = bb.getShort();
 
         System.out.println("\n--- Starting Request #" + requestID + " (TML: " + tml + ")---");
-        System.out.println("Client IP: " + clntSock.getInetAddress().getHostAddress() + ", Port: " + clntSock.getPort());
+        System.out.println("Client IP: " + addr.getHostAddress() + ", Port: " + port);
 
         int bodyLen = Short.toUnsignedInt(tml) - 4;
         byte[] body = new byte[bodyLen];
@@ -110,12 +112,12 @@ public class myFirstTCPServer {
         return true;
     }
 
-    private static void sendErrorResponse(OutputStream out, short requestID) throws IOException {
+    private static void sendErrorResponse(DatagramSocket sock, InetAddress addr, int port, short requestID) throws IOException {
         ByteBuffer bb = ByteBuffer.allocate(4);
         bb.putShort(requestID);
         bb.putShort((short) -1);
-        out.write(bb.array());
-        out.flush();
+        DatagramPacket packet = new DatagramPacket(bb.array(), bb.array().length, addr, port);
+        sock.send(packet);
         System.out.println("Sent Error Response: RequestID " + requestID + ", -1");
     }
 
